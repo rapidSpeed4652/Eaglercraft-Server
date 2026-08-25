@@ -1,0 +1,93 @@
+name: Eaglercraft Server
+
+on:
+  workflow_dispatch:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Download server
+        run: |
+          wget -O server.zip \
+            https://github.com/rapidSpeed4652/Eaglercraft-Server/releases/latest/download/server.zip
+          unzip -q server.zip -d server
+          rm server.zip
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Install cloudflared
+        run: |
+          wget -O cloudflared \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x cloudflared
+          ./cloudflared --version
+
+      - name: Start Minecraft server
+        working-directory: server
+        run: |
+          echo "eula=true" > eula.txt
+          nohup java -Xms1G -Xmx4G -jar paper-1.12.2-1620.jar nogui > server.log 2>&1 &
+          echo $! > server.pid
+
+      - name: Wait for Minecraft server
+        working-directory: server
+        run: |
+          echo "Waiting for Minecraft server..."
+          for i in {1..120}; do
+            if grep -q "Done (" server.log; then
+              echo "Minecraft server is ready!"
+              break
+            fi
+            sleep 2
+          done
+
+          if ! grep -q "Done (" server.log; then
+            echo "Minecraft server failed to start."
+            cat server.log
+            exit 1
+          fi
+
+      - name: Start Cloudflare Tunnel
+        run: |
+          nohup ./cloudflared tunnel --url http://127.0.0.1:25565 > cloudflared.log 2>&1 &
+
+          echo "Waiting for Cloudflare tunnel..."
+          for i in {1..60}; do
+            URL=$(grep -oE 'https://[-a-zA-Z0-9]+\.trycloudflare\.com' cloudflared.log | head -n 1 || true)
+
+            if [ -n "$URL" ]; then
+              echo "=========================================="
+              echo "EAGLERCRAFT SERVER ADDRESS:"
+              echo "wss://${URL#https://}"
+              echo "=========================================="
+              echo "EAGLER_WSS=$URL" >> "$GITHUB_ENV"
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ -z "$URL" ]; then
+            echo "Cloudflare tunnel failed to start."
+            cat cloudflared.log
+            exit 1
+          fi
+
+      - name: Keep server alive
+        run: |
+          echo "Server is running."
+          echo "Players can now connect using the WSS address above."
+          echo "The server will remain online until this workflow ends."
+
+          while kill -0 $(cat server/server.pid) 2>/dev/null; do
+            sleep 30
+          done
+
+          echo "Minecraft server stopped."
