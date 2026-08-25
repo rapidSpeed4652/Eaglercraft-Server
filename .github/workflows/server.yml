@@ -9,12 +9,12 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Download server
-        run: |
-          wget -O server.zip \
-            https://github.com/rapidSpeed4652/Eaglercraft-Server/releases/latest/download/server.zip
-          unzip -q server.zip -d server
-          rm server.zip
+      - - name: Download server
+          run: |
+            wget -O server.zip \
+              https://github.com/rapidSpeed4652/Eaglercraft-Server/releases/latest/download/server.zip
+            unzip -q server.zip
+            rm server.zip
 
       - name: Install Java
         uses: actions/setup-java@v4
