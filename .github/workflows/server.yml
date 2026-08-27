@@ -117,43 +117,18 @@ jobs:
 
           echo "CLOUDFLARED_PID=$CLOUDFLARED_PID" >> "$GITHUB_ENV"
 
-      - name: Save Minecraft server
-        if: always()
+      - name: Monitor server
+        working-directory: server
         run: |
-          echo "Saving Minecraft server..."
-            rm -f server.zip
+          echo "Server is running."
+          echo "Players can connect using the WSS address above."
+          echo ""
 
-          if [ -f server/server.pid ]; then
-            PID=$(cat server/server.pid)
-            zip -qr server.zip server/
+          while kill -0 $(cat server.pid) 2>/dev/null; do
+            echo "----- Latest Minecraft log -----"
+            tail -n 10 server.log
+            echo "--------------------------------"
+            sleep 30
+          done
 
-            if kill -0 "$PID" 2>/dev/null; then
-              echo "Sending stop command..."
-            echo "New server.zip created:"
-            ls -lh server.zip
-
-              echo "stop" > server/stop-command
-            echo ""
-            echo "=========================================="
-            echo "Uploading updated world..."
-            echo "=========================================="
-
-            TAG=$(gh release list \
-              --repo "$GITHUB_REPOSITORY" \
-              --limit 1 \
-              --json tagName \
-              --jq '.[0].tagName')
-
-            if [ -z "$TAG" ]; then
-              echo "ERROR: No GitHub Release found."
-              exit 1
-            fi
-
-              # Send the command through the server's stdin.
-              # Paper must receive the actual console command.
-              kill -TERM "$PID" 2>/dev/null || true
-            echo "Using release: $TAG"
-
-              sleep 10
-            fi
-          fi
+          echo "Minecraft server stopped."
